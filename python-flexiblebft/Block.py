@@ -1,35 +1,34 @@
 from Certificate import Certificate
+import hashlib
 
 class Block:
-    def __init__(self, id, commands, height, view, parent_hashes):
-        self.id = id
+    def __init__(self, commands, height, view, previous_hash):
         self.commands = commands
         self.height = height
         self.view = view
-        self.parent_hashes = parent_hashes
-        if height > 0 and len(parent_hashes) == 0:
+        self.previous_hash = previous_hash
+        if height > 0 and previous_hash is None:
             raise NotImplementedError
         self.signatures = {}
         self.certification = None
 
     def clone_for_view(self, view):
-        return Block(self.id, self.commands, self.height, view, self.parent_hashes)
+        return Block(self.commands, self.height, view, self.previous_hash)
 
-    def __hash__(self):
-        return hash(self.id)
+    def get_hash(self):
+        previous = self.previous_hash
+        if previous is None:
+            previous = ""
+        commands_str = " ".join([str(i) for i in self.commands])
+        hash_str = commands_str + ":" + str(self.view) + ":" + str(self.height) + ":" + previous
+        hash_bytes = str.encode(hash_str)
+        return hashlib.sha256(hash_bytes).hexdigest()
 
     def sign(self, sender, signature):
         self.signatures[sender.id] = signature
 
     def certify(self):
         self.certification = Certificate(self, self.view, self.signatures)
-
-
-
-class Certificate:
-    def __init__(self, view, signatures):
-        self.view = view
-        self.signatures = signatures
 
 
 

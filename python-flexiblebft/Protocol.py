@@ -1,11 +1,14 @@
 import math
 import random
+import traceback
 from threading import Thread
+import socket
 from Block import Block
 from Replica import Replica
 from MessageType import MessageType
 from time import sleep
-
+from CONFIG import PROTOCOL_HOST, PROTOCOL_PORT
+from SocketHelper import recvMsg, sendMsg, SocketDisconnectedException
 
 class Protocol:
     def __init__(self, n):
@@ -22,6 +25,13 @@ class Protocol:
         self.commands = []
         for i in range(0, self.n):
             self.replicas.append(Replica(self, i, self.qr))
+        # Connection
+        self.local_sock = self.listen_socket_init('', PROTOCOL_PORT)  # 44444
+
+    def initialize_connection(self):
+
+        if self.local_sock:
+            print("Local Listening Socket Established; Host:", '; Port:', PROTOCOL_PORT)
 
     def run(self):
         leader = self.replicas[0]
@@ -40,9 +50,9 @@ class Protocol:
 
     def print_broadcast(self, sender, message):
         if message.type is MessageType.PROPOSE:
-            print(sender.id, "PROPOSED", message.block.id)
+            print(sender.id, "PROPOSED", message.block.get_hash())
         elif message.type is MessageType.VOTE:
-            print(sender.id, "VOTED FOR", message.block.id)
+            print(sender.id, "VOTED FOR", message.block.get_hash())
         else:
             print(sender.id, "BLAMED IN", message.view)
 
@@ -50,25 +60,52 @@ class Protocol:
         sleep(random.random())
         replica.receive_msg(message)
 
-    def create_block(self, height, view, previous):
-        while len(self.commands_queue) == 0:
-            print("SLEEP")
-            sleep(0.1)
-        commands = self.commands_queue.pop(0)
-        parent_hashes = []
-        if previous is not None:
-            parent_hashes = previous.parent_hashes + [hash(previous)]
-        block = Block(self.block_index, commands, height, view, parent_hashes)
-        self.block_index += 1
-        print(self.block_index)
-        return block
-
     def certify_block(self, block):
-        print("CERTIFIED:", str(block.id))
+        print("CERTIFIED:", block.get_hash())
 
     def add_command(self, command):
         self.commands.append(command)
         self.commands_queue.append(command)
 
 
+
+    def listen_socket_init(self, host, port):
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+            sock.listen(10)
+            return sock
+        except Exception as e:
+            print(e)
+
+    def receive_client(self, client_socket, addr):
+        while True:
+            try:
+                # bft_proto.BlameMSG()
+                # bft_proto.ProposalMSG()
+                # bft_proto.VoteMSG()
+                # msg = recvMsg(client_socket, bft_proto.BlameMSG())
+                msg = "NOT IMPLEMENTED YET"
+                print("recv replica request: ", str(msg))
+                # processA2U(msg, self)
+            except SocketDisconnectedException as e:
+                print("[ERROR: UPS SOCKET DISCONNECTED. RECONNECTING...]")
+                # self.ups_sock, addr = self.connection.local_sock.accept()
+                pass
+            except Exception as e:
+                print("ERROR: Listen for Replicas Thread.", e)
+                print("Stack Trace:", traceback.print_exc())
+                pass
+            # msg = client_socket.recv(1024)
+            #
+            # client_socket.send(msg)
+        # clientsocket.close()
+
+    def listen_to_replicas(self):
+        while True:
+            c, address = self.local_sock.accept()  # Establish connection with client.
+            x = Thread(target=self.receive_client, args=(c, address))
+            x.start()
+        # self.local_sock.close()
 
